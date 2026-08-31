@@ -1,0 +1,44 @@
+{
+  "name": "segment34-pebble",
+  "author": "deco",
+  "version": "0.0.0",
+  "keywords": ["segmented"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "segment34-pebble",
+    "uuid": "4586528d-4576-40d9-8ac4-ad48416fc845",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "emery"
+    ],
+    "watchapp": {
+      "watchface": true
+    },
+    "messageKeys": [
+      "dummy"
+    ],
+    "resources": {
+      "media": [
+        {
+          "type": "bitmap",
+          "name": "IMAGE_TEST_LAYOUT",
+          "file": "images/test_layout.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_DISPLAY_MASK",
+          "file": "images/display_mask.png",
+          "memoryFormat": "1BitPalette"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_SEGMENTS",
+          "file": "images/segments.png",
+          "memoryFormat": "1BitPalette"
+        }
+      ]
+    }
+  }
+}

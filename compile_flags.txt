@@ -1,0 +1,5 @@
+-I/home/deco/.pebble-sdk/SDKs/current/sdk-core/pebble/emery/include
+-Ibuild/include
+-Ibuild/emery/src
+-std=c99
+-DPBL_PLATFORM_EMERY
