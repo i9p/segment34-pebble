@@ -22,9 +22,9 @@
     "resources": {
       "media": [
         {
-          "type": "bitmap",
-          "name": "IMAGE_TEST_LAYOUT",
-          "file": "images/test_layout.png"
+          "type": "font",
+          "name": "TERMINUS_16",
+          "file": "fonts/terminus.ttf"
         },
         {
           "type": "bitmap",
