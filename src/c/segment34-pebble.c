@@ -5,14 +5,19 @@
 static Window *s_window;
 static Layer *s_time_layer, *s_10h_layer, *s_01h_layer, *s_col_layer, *s_10m_layer, *s_01m_layer;
 
-static GBitmap *s_displaymask_bitmap, *s_segments_bitmap;
+static GBitmap *s_displaymask_bitmap, *s_segments_bitmap, *s_dotmatrix_bitmap;
 static GBitmap *s_segment_bitmap[33];
 
 static GFont s_dateline_font;
 
-static TextLayer *s_date_textlayer, *s_notification_textlayer, *s_seconds_textlayer;
+static TextLayer *s_weather1_textlayer, *s_weather2_textlayer;
 
-static BitmapLayer *s_displaymask_layer;
+static Layer *s_health_layer;
+static TextLayer *s_date_textlayer, *s_notification_textlayer, *s_seconds_textlayer;
+static TextLayer *s_steps_textlayer, *s_hr_textlayer, *s_sleep_textlayer;
+static TextLayer *s_stepsval_textlayer, *s_hrval_textlayer, *s_sleepval_textlayer;
+
+static BitmapLayer *s_displaymask_layer, *s_dotmatrix_layer;
 
 static GColor bg_color = GColorWhite;
 static GColor inactive_color = GColorLightGray;
@@ -20,6 +25,9 @@ static GColor gradient_top = GColorBlack;
 static GColor gradient_bottom = GColorDarkGray;
 static GColor date_color = GColorBlack;
 static GColor notif_color = GColorBlack;
+static GColor weather_color = GColorBlack;
+static GColor health_label_color = GColorBlack;
+static GColor health_active_color = GColorBlack;
 
 static int time_digits[4] = {0, 0, 0, 0};
 static int seconds_timeout = 15;
@@ -137,6 +145,15 @@ static void set_layers_update_procs() {
 
 static void layers_add_children(Layer *window_layer) {
   layer_add_child(window_layer, s_time_layer);
+  layer_add_child(window_layer, text_layer_get_layer(s_weather1_textlayer));
+  layer_add_child(window_layer, text_layer_get_layer(s_weather2_textlayer));
+
+  layer_add_child(window_layer, s_health_layer);
+  layer_add_child(s_health_layer, text_layer_get_layer(s_steps_textlayer));
+  layer_add_child(s_health_layer, bitmap_layer_get_layer(s_dotmatrix_layer));
+
+  layer_add_child(bitmap_layer_get_layer(s_dotmatrix_layer), text_layer_get_layer(s_stepsval_textlayer));
+
   layer_add_child(s_time_layer, s_10h_layer);
   layer_add_child(s_time_layer, s_01h_layer);
   layer_add_child(s_time_layer, s_col_layer);
@@ -147,8 +164,8 @@ static void layers_add_children(Layer *window_layer) {
   layer_add_child(s_time_layer, text_layer_get_layer(s_seconds_textlayer));
 }
 
-static void set_dateline_style(TextLayer *text_layer, GColor textlayer_color) {
-  text_layer_set_font(text_layer, fonts_load_custom_font(resource_get_handle(RESOURCE_ID_TERMINUS_16)));
+static void set_text_style(TextLayer *text_layer, GColor textlayer_color, int font_id) {
+  text_layer_set_font(text_layer, fonts_load_custom_font(resource_get_handle(font_id)));
   text_layer_set_text_color(text_layer, textlayer_color);
   text_layer_set_background_color(text_layer, GColorClear);
 }
@@ -160,9 +177,20 @@ static void prv_window_load(Window *window) {
   window_set_background_color(window, bg_color);
   s_displaymask_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_DISPLAY_MASK);
   s_segments_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_SEGMENTS);
+  s_dotmatrix_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_DOTMATRIX);
+
+  GColor *palette = gbitmap_get_palette(s_displaymask_bitmap);
+  palette[1] = bg_color;
+  GColor *palette2 = gbitmap_get_palette(s_segments_bitmap);
+  palette2[1] = inactive_color;
+  GColor *palette3 = gbitmap_get_palette(s_dotmatrix_bitmap);
+  palette3[1] = inactive_color;
 
   s_time_layer = layer_create(GRect(1, 72, 198, 76+18));
+
   s_displaymask_layer = bitmap_layer_create(GRect(0, 0, 198, 76));
+  bitmap_layer_set_compositing_mode(s_displaymask_layer, GCompOpSet);
+  bitmap_layer_set_bitmap(s_displaymask_layer, s_displaymask_bitmap);
 
   s_10h_layer = layer_create(GRect(0, 0, 38, 76));
   s_01h_layer = layer_create(GRect(40, 0, 38, 76));
@@ -170,20 +198,36 @@ static void prv_window_load(Window *window) {
   s_10m_layer = layer_create(GRect(120, 0, 38, 76));
   s_01m_layer = layer_create(GRect(160, 0, 38, 76));
 
+  s_weather1_textlayer = text_layer_create(GRect(0, 24, 200, 24));
+  set_text_style(s_weather1_textlayer, weather_color, RESOURCE_ID_TERMINUS_BOLD_22);
+  text_layer_set_text_alignment(s_weather1_textlayer, GTextAlignmentCenter);
+  text_layer_set_text(s_weather1_textlayer, "13C 13km/h 84%");
+
+  s_weather2_textlayer = text_layer_create(GRect(0, 44, 200, 24));
+  set_text_style(s_weather2_textlayer, weather_color, RESOURCE_ID_TERMINUS_BOLD_22);
+  text_layer_set_text_alignment(s_weather2_textlayer, GTextAlignmentCenter);
+  text_layer_set_text(s_weather2_textlayer, "HEAVY SHOWERS");
+
   s_date_textlayer = text_layer_create(GRect(2, 76, 148, 18));
-  set_dateline_style(s_date_textlayer, date_color);
+  set_text_style(s_date_textlayer, date_color, RESOURCE_ID_TERMINUS_16);
   text_layer_set_text(s_date_textlayer, "ERROR!");
 
   s_seconds_textlayer = text_layer_create(GRect(180, 76, 16, 18));
-  set_dateline_style(s_seconds_textlayer, date_color);
+  set_text_style(s_seconds_textlayer, date_color, RESOURCE_ID_TERMINUS_16);
   text_layer_set_text(s_seconds_textlayer, "--");
 
-  GColor *palette = gbitmap_get_palette(s_displaymask_bitmap);
-  palette[1] = bg_color;
-  GColor *palette2 = gbitmap_get_palette(s_segments_bitmap);
-  palette2[1] = inactive_color;
-  bitmap_layer_set_compositing_mode(s_displaymask_layer, GCompOpSet);
-  bitmap_layer_set_bitmap(s_displaymask_layer, s_displaymask_bitmap);
+  s_health_layer = layer_create(GRect(0, 170, 200, 26));
+  s_dotmatrix_layer = bitmap_layer_create(GRect(0, 13, 200, 13));
+  bitmap_layer_set_compositing_mode(s_dotmatrix_layer, GCompOpSet);
+  bitmap_layer_set_bitmap(s_dotmatrix_layer, s_dotmatrix_bitmap);
+
+  s_steps_textlayer = text_layer_create(GRect(13, -1, 53, 13));
+  set_text_style(s_steps_textlayer, health_label_color, RESOURCE_ID_TERMINUS_12);
+  text_layer_set_text(s_steps_textlayer, "STEPS:");
+
+  s_stepsval_textlayer = text_layer_create(GRect(13, -5, 53, 13+6));
+  set_text_style(s_stepsval_textlayer, health_active_color, RESOURCE_ID_DOTO_18);
+  text_layer_set_text(s_stepsval_textlayer, "12345");
 
   for (int i = 0; i < 33; i++) {
     s_segment_bitmap[i] = gbitmap_create_as_sub_bitmap(s_segments_bitmap, segment_bounds[i]);
@@ -202,14 +246,21 @@ static void prv_window_unload(Window *window) {
   tick_timer_service_unsubscribe();
   accel_tap_service_unsubscribe();
   
+  bitmap_layer_destroy(s_displaymask_layer);
+  bitmap_layer_destroy(s_dotmatrix_layer);
+
   for (int i = 0; i < 33; i++) {
     gbitmap_destroy(s_segment_bitmap[i]);
   }
 
   gbitmap_destroy(s_segments_bitmap);
   gbitmap_destroy(s_displaymask_bitmap);
+  gbitmap_destroy(s_dotmatrix_bitmap);
 
-  bitmap_layer_destroy(s_displaymask_layer);
+  text_layer_destroy(s_weather1_textlayer);
+  text_layer_destroy(s_weather2_textlayer);
+
+  text_layer_destroy(s_steps_textlayer);
 
   text_layer_destroy(s_date_textlayer);
   text_layer_destroy(s_seconds_textlayer);
@@ -238,7 +289,6 @@ static void prv_init(void) {
 }
 
 static void prv_deinit(void) {
-  
   window_destroy(s_window);
 }
 

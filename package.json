@@ -10,6 +10,7 @@
     "uuid": "4586528d-4576-40d9-8ac4-ad48416fc845",
     "sdkVersion": "3",
     "enableMultiJS": true,
+    "capabilities": [ "health" ],
     "targetPlatforms": [
       "emery"
     ],
@@ -27,9 +28,30 @@
           "file": "fonts/terminus.ttf"
         },
         {
+          "type": "font",
+          "name": "TERMINUS_12",
+          "file": "fonts/terminus.ttf"
+        },
+        {
+          "type": "font",
+          "name": "TERMINUS_BOLD_22",
+          "file": "fonts/terminusbold.ttf"
+        },
+        {
+          "type": "font",
+          "name": "DOTO_18",
+          "file": "fonts/Doto-Regular.ttf"
+        },
+        {
           "type": "bitmap",
           "name": "IMAGE_DISPLAY_MASK",
           "file": "images/display_mask.png",
+          "memoryFormat": "1BitPalette"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_DOTMATRIX",
+          "file": "images/dot_matrix.png",
           "memoryFormat": "1BitPalette"
         },
         {
