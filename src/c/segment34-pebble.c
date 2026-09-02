@@ -1,5 +1,4 @@
 #include <pebble.h>
-#include <stdint.h>
 #include "dithered_rects.h"
 #include "segments.h"
 
@@ -118,6 +117,10 @@ static void handle_tick(struct tm* current_time, TimeUnits units_changed) {
 
 static void handle_accel_tap(AccelAxisType axis, int32_t direction) {
   seconds_timeout = 15;
+
+  time_t now = time(NULL);
+	tick_time = localtime(&now);
+	handle_tick(tick_time, SECOND_UNIT | MINUTE_UNIT | HOUR_UNIT);
 
   tick_timer_service_unsubscribe();
   tick_timer_service_subscribe(SECOND_UNIT, &handle_tick);
