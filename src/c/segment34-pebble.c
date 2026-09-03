@@ -1,11 +1,12 @@
 #include <pebble.h>
 #include "dithered_rects.h"
 #include "segments.h"
+#include "dot_matrix.h"
 
 static Window *s_window;
 static Layer *s_time_layer, *s_10h_layer, *s_01h_layer, *s_col_layer, *s_10m_layer, *s_01m_layer;
 
-static GBitmap *s_displaymask_bitmap, *s_segments_bitmap, *s_dotmatrix_bitmap;
+static GBitmap *s_displaymask_bitmap, *s_segments_bitmap;
 static GBitmap *s_segment_bitmap[33];
 
 static GFont s_dateline_font;
@@ -15,19 +16,19 @@ static TextLayer *s_weather1_textlayer, *s_weather2_textlayer;
 static Layer *s_health_layer;
 static TextLayer *s_date_textlayer, *s_notification_textlayer, *s_seconds_textlayer;
 static TextLayer *s_steps_textlayer, *s_hr_textlayer, *s_sleep_textlayer;
-static TextLayer *s_stepsval_textlayer, *s_hrval_textlayer, *s_sleepval_textlayer;
+static Layer *s_stepsval_layer, *s_hrval_layer, *s_sleepval_layer;
 
-static BitmapLayer *s_displaymask_layer, *s_dotmatrix_layer;
+static BitmapLayer *s_displaymask_layer;
 
-static GColor bg_color = GColorWhite;
-static GColor inactive_color = GColorLightGray;
-static GColor gradient_top = GColorBlack;
-static GColor gradient_bottom = GColorDarkGray;
-static GColor date_color = GColorBlack;
-static GColor notif_color = GColorBlack;
-static GColor weather_color = GColorBlack;
-static GColor health_label_color = GColorBlack;
-static GColor health_active_color = GColorBlack;
+static GColor bg_color = GColorBlack;
+static GColor inactive_color = GColorDarkGray;
+static GColor gradient_top = GColorRed;
+static GColor gradient_bottom = GColorBlue;
+static GColor date_color = GColorCeleste;
+static GColor notif_color = GColorWhite;
+static GColor weather_color = GColorWhite;
+static GColor health_label_color = GColorWhite;
+static GColor health_active_color = GColorWhite;
 
 static int time_digits[4] = {0, 0, 0, 0};
 static int seconds_timeout = 15;
@@ -41,41 +42,41 @@ static void draw_time_layer(Layer *layer, GContext *ctx) {
   draw_gradient_rect(ctx, GRect(0, 1, 198, 76), gradient_top, gradient_bottom, TOP_TO_BOTTOM);
 }
 
-static void draw_single_seg(GContext *ctx, int segment) {
-  graphics_draw_bitmap_in_rect(ctx, s_segment_bitmap[segment], GRect(segment_pos[segment].x, segment_pos[segment].y, segment_bounds[segment].size.w, segment_bounds[segment].size.h));
-}
-
-static void draw_segmented_text(GContext *ctx, int segment) {
-  for (int i = 0; i < 33; i++) {
-    if (!segment_maps[segment][i]) {
-      draw_single_seg(ctx, i);
-    }
-  }
-}
-
 static void draw_segment_10h(Layer *layer, GContext *ctx) {
   graphics_context_set_compositing_mode(ctx, GCompOpSet);
-  draw_segmented_text(ctx, time_digits[0]);
+  draw_segmented_text(ctx, s_segment_bitmap, time_digits[0]);
 }
 
 static void draw_segment_01h(Layer *layer, GContext *ctx) {
   graphics_context_set_compositing_mode(ctx, GCompOpSet);
-  draw_segmented_text(ctx, time_digits[1]);
+  draw_segmented_text(ctx, s_segment_bitmap, time_digits[1]);
 }
 
 static void draw_segment_col(Layer *layer, GContext *ctx) {
   graphics_context_set_compositing_mode(ctx, GCompOpSet);
-  draw_segmented_text(ctx, 10);
+  draw_segmented_text(ctx, s_segment_bitmap, 10);
 }
 
 static void draw_segment_10m(Layer *layer, GContext *ctx) {
   graphics_context_set_compositing_mode(ctx, GCompOpSet);
-  draw_segmented_text(ctx, time_digits[2]);
+  draw_segmented_text(ctx, s_segment_bitmap, time_digits[2]);
 }
 
 static void draw_segment_01m(Layer *layer, GContext *ctx) {
   graphics_context_set_compositing_mode(ctx, GCompOpSet);
-  draw_segmented_text(ctx, time_digits[3]);
+  draw_segmented_text(ctx, s_segment_bitmap, time_digits[3]);
+}
+
+static void draw_steps_value(Layer *layer, GContext *ctx) {
+  draw_steps(ctx, health_active_color, inactive_color);
+}
+
+static void draw_hr_value(Layer *layer, GContext *ctx) {
+  draw_hr(ctx, health_active_color, inactive_color);
+}
+
+static void draw_sleep_value(Layer *layer, GContext *ctx) {
+  draw_sleep(ctx, health_active_color, inactive_color);
 }
 
 static void handle_tick(struct tm* current_time, TimeUnits units_changed) {
@@ -106,6 +107,23 @@ static void handle_tick(struct tm* current_time, TimeUnits units_changed) {
     time_digits[2] = current_time->tm_min / 10;
     time_digits[3] = current_time->tm_min % 10;
 
+    if (health_service_metric_accessible(HealthMetricStepCount, time_start_of_today(), time(NULL))
+        == HealthServiceAccessibilityMaskAvailable) {
+      fmt_steps(health_service_sum_today(HealthMetricStepCount));
+    }
+
+    if (health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL))
+        == HealthServiceAccessibilityMaskAvailable) {
+      fmt_hr(health_service_peek_current_value(HealthMetricHeartRateBPM));
+    }
+
+    if (health_service_metric_accessible(HealthMetricSleepSeconds, time_start_of_today(), time(NULL))
+        == HealthServiceAccessibilityMaskAvailable) {
+      fmt_sleep(health_service_sum_today(HealthMetricSleepSeconds));
+    }
+
+    layer_mark_dirty(s_stepsval_layer);
+    layer_mark_dirty(s_sleepval_layer);
     layer_mark_dirty(s_10m_layer);
     layer_mark_dirty(s_01m_layer);
   }
@@ -141,6 +159,10 @@ static void set_layers_update_procs() {
   layer_set_update_proc(s_col_layer, draw_segment_col);
   layer_set_update_proc(s_10m_layer, draw_segment_10m);
   layer_set_update_proc(s_01m_layer, draw_segment_01m);
+
+  layer_set_update_proc(s_stepsval_layer, draw_steps_value);
+  layer_set_update_proc(s_hrval_layer, draw_hr_value);
+  layer_set_update_proc(s_sleepval_layer, draw_sleep_value);
 }
 
 static void layers_add_children(Layer *window_layer) {
@@ -150,9 +172,12 @@ static void layers_add_children(Layer *window_layer) {
 
   layer_add_child(window_layer, s_health_layer);
   layer_add_child(s_health_layer, text_layer_get_layer(s_steps_textlayer));
-  layer_add_child(s_health_layer, bitmap_layer_get_layer(s_dotmatrix_layer));
+  layer_add_child(s_health_layer, text_layer_get_layer(s_hr_textlayer));
+  layer_add_child(s_health_layer, text_layer_get_layer(s_sleep_textlayer));
 
-  layer_add_child(bitmap_layer_get_layer(s_dotmatrix_layer), text_layer_get_layer(s_stepsval_textlayer));
+  layer_add_child(s_health_layer, s_stepsval_layer);
+  layer_add_child(s_health_layer, s_hrval_layer);
+  layer_add_child(s_health_layer, s_sleepval_layer);
 
   layer_add_child(s_time_layer, s_10h_layer);
   layer_add_child(s_time_layer, s_01h_layer);
@@ -177,14 +202,11 @@ static void prv_window_load(Window *window) {
   window_set_background_color(window, bg_color);
   s_displaymask_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_DISPLAY_MASK);
   s_segments_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_SEGMENTS);
-  s_dotmatrix_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_DOTMATRIX);
 
   GColor *palette = gbitmap_get_palette(s_displaymask_bitmap);
   palette[1] = bg_color;
   GColor *palette2 = gbitmap_get_palette(s_segments_bitmap);
   palette2[1] = inactive_color;
-  GColor *palette3 = gbitmap_get_palette(s_dotmatrix_bitmap);
-  palette3[1] = inactive_color;
 
   s_time_layer = layer_create(GRect(1, 72, 198, 76+18));
 
@@ -216,18 +238,23 @@ static void prv_window_load(Window *window) {
   set_text_style(s_seconds_textlayer, date_color, RESOURCE_ID_TERMINUS_16);
   text_layer_set_text(s_seconds_textlayer, "--");
 
-  s_health_layer = layer_create(GRect(0, 170, 200, 26));
-  s_dotmatrix_layer = bitmap_layer_create(GRect(0, 13, 200, 13));
-  bitmap_layer_set_compositing_mode(s_dotmatrix_layer, GCompOpSet);
-  bitmap_layer_set_bitmap(s_dotmatrix_layer, s_dotmatrix_bitmap);
+  s_health_layer = layer_create(GRect(0, 170, 200, 34));
 
-  s_steps_textlayer = text_layer_create(GRect(13, -1, 53, 13));
+  s_steps_textlayer = text_layer_create(GRect(6, 0, 53, 14));
   set_text_style(s_steps_textlayer, health_label_color, RESOURCE_ID_TERMINUS_12);
   text_layer_set_text(s_steps_textlayer, "STEPS:");
+  s_stepsval_layer = layer_create(GRect(6, 14, 16*5, 20));
 
-  s_stepsval_textlayer = text_layer_create(GRect(13, -5, 53, 13+6));
-  set_text_style(s_stepsval_textlayer, health_active_color, RESOURCE_ID_DOTO_18);
-  text_layer_set_text(s_stepsval_textlayer, "12345");
+  s_hr_textlayer = text_layer_create(GRect(76, 0, 53, 14));
+  set_text_style(s_hr_textlayer, health_label_color, RESOURCE_ID_TERMINUS_12);
+  text_layer_set_text(s_hr_textlayer, "HR:");
+  s_hrval_layer = layer_create(GRect(76, 14, 16*3, 20));
+
+  s_sleep_textlayer = text_layer_create(GRect(130, 0, 53, 14));
+  set_text_style(s_sleep_textlayer, health_label_color, RESOURCE_ID_TERMINUS_12);
+  text_layer_set_text(s_sleep_textlayer, "SLEEP:");
+  s_sleepval_layer = layer_create(GRect(130, 14, 16*5, 20));
+
 
   for (int i = 0; i < 33; i++) {
     s_segment_bitmap[i] = gbitmap_create_as_sub_bitmap(s_segments_bitmap, segment_bounds[i]);
@@ -247,7 +274,6 @@ static void prv_window_unload(Window *window) {
   accel_tap_service_unsubscribe();
   
   bitmap_layer_destroy(s_displaymask_layer);
-  bitmap_layer_destroy(s_dotmatrix_layer);
 
   for (int i = 0; i < 33; i++) {
     gbitmap_destroy(s_segment_bitmap[i]);
@@ -255,12 +281,16 @@ static void prv_window_unload(Window *window) {
 
   gbitmap_destroy(s_segments_bitmap);
   gbitmap_destroy(s_displaymask_bitmap);
-  gbitmap_destroy(s_dotmatrix_bitmap);
 
   text_layer_destroy(s_weather1_textlayer);
   text_layer_destroy(s_weather2_textlayer);
 
   text_layer_destroy(s_steps_textlayer);
+  layer_destroy(s_stepsval_layer);
+
+  text_layer_destroy(s_hr_textlayer);
+
+  text_layer_destroy(s_sleep_textlayer);
 
   text_layer_destroy(s_date_textlayer);
   text_layer_destroy(s_seconds_textlayer);

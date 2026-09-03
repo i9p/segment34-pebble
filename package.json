@@ -38,20 +38,9 @@
           "file": "fonts/terminusbold.ttf"
         },
         {
-          "type": "font",
-          "name": "DOTO_18",
-          "file": "fonts/Doto-Regular.ttf"
-        },
-        {
           "type": "bitmap",
           "name": "IMAGE_DISPLAY_MASK",
           "file": "images/display_mask.png",
-          "memoryFormat": "1BitPalette"
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_DOTMATRIX",
-          "file": "images/dot_matrix.png",
           "memoryFormat": "1BitPalette"
         },
         {

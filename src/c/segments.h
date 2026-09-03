@@ -1,6 +1,7 @@
-#include <pebble.h>
 #ifndef SEGMENTS_H_
 #define SEGMENTS_H_
+
+#include <pebble.h>
 
 // this is where each segment is in the segment atlas image (sugar)
 static const GRect segment_bounds[33] = {
@@ -95,8 +96,8 @@ static const bool segment_maps[14][33] = {
   {0,1,1,1,1,1,0,1,1,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,0,0,0,0,0,1,1}, // P (13)
 };
 
-// USING THE POWER OF segment_bounds AND segment_pos YOU CAN PLACE EACH SEGMENT PERFECTLY
-// when drawing the bitmaps use the segment_pos for x and y and the segment_bounds w and h
-// okay? okay! thank youuuuuu :3
+void draw_single_seg(GContext *ctx, GBitmap *bitmap, int segment);
+
+void draw_segmented_text(GContext *ctx, GBitmap *segment_bitmaps[], int segment);
 
 #endif // SEGMENTS_H_
