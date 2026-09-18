@@ -2,15 +2,22 @@
   "name": "segment34-pebble",
   "author": "deco",
   "version": "0.0.0",
-  "keywords": ["segmented"],
+  "keywords": [
+    "segmented"
+  ],
   "private": true,
-  "dependencies": {},
+  "dependencies": {
+    "@rebble/clay": "^1.1.0"
+  },
   "pebble": {
     "displayName": "segment34-pebble",
     "uuid": "4586528d-4576-40d9-8ac4-ad48416fc845",
     "sdkVersion": "3",
     "enableMultiJS": true,
-    "capabilities": [ "health" ],
+    "capabilities": [
+      "health",
+      "configurable"
+    ],
     "targetPlatforms": [
       "emery"
     ],
@@ -18,7 +25,20 @@
       "watchface": true
     },
     "messageKeys": [
-      "dummy"
+      "BackgroundColor",
+      "InactiveColor",
+      "GradientTopColor",
+      "GradientBottomColor",
+      "DateColor",
+      "SecondaryDateColor",
+      "WeatherColor",
+      "HealthLabelColor",
+      "HealthActiveColor",
+      "SecondsTimeout",
+
+      "GET_WEATHER",
+      "WEATHERLINE1",
+      "WEATHERLINE2"
     ],
     "resources": {
       "media": [
