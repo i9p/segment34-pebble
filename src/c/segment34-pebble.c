@@ -6,6 +6,8 @@
 #define SETTINGS_KEY 1
 #define WEATHER_KEY 2
 
+#define SECONDS_IN_MINUTE 60
+
 static Window *s_window;
 static Layer *s_active_layer, *s_10h_layer, *s_01h_layer, *s_col_layer, *s_10m_layer, *s_01m_layer;
 
@@ -13,7 +15,7 @@ static GBitmap *s_displaymask_bitmap, *s_segments_bitmap;
 static GBitmap *s_segment_bitmap[33];
 static GColor *palette, *palette2;
 
-static GFont s_dateline_font;
+static GFont s_dateline_font, s_weatherline_font, s_healthlabel_font;
 
 static TextLayer *s_weather1_textlayer, *s_weather2_textlayer;
 
@@ -42,12 +44,13 @@ static ClaySettings settings;
 typedef struct WeatherData {
   char line1[24];
   char line2[24];
+  time_t last_updated;
 } WeatherData;
 
 static WeatherData weather_data;
 
 static int time_digits[4] = {0, 0, 0, 0};
-static int seconds_timeout_left = 15;
+static int seconds_timeout_left = -1;
 
 static const char *const WEEKDAYS[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
 static const char *const MONTHS[]   = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", 
@@ -120,13 +123,6 @@ static void handle_tick(struct tm* current_time, TimeUnits units_changed) {
     layer_mark_dirty(s_01h_layer);
   }
 
-  if (units_changed & MINUTE_UNIT && tick_time->tm_min % 5 == 0) {
-    DictionaryIterator *iter;
-    app_message_outbox_begin(&iter);
-    dict_write_uint8(iter, MESSAGE_KEY_GET_WEATHER, 0);
-    app_message_outbox_send();
-  }
-
   if (units_changed & MINUTE_UNIT) {
     time_digits[2] = current_time->tm_min / 10;
     time_digits[3] = current_time->tm_min % 10;
@@ -150,6 +146,13 @@ static void handle_tick(struct tm* current_time, TimeUnits units_changed) {
     layer_mark_dirty(s_sleepval_layer);
     layer_mark_dirty(s_10m_layer);
     layer_mark_dirty(s_01m_layer);
+
+    if ((time(NULL) - weather_data.last_updated) > 15*SECONDS_IN_MINUTE) {
+      DictionaryIterator *iter;
+      app_message_outbox_begin(&iter);
+      dict_write_uint8(iter, MESSAGE_KEY_GET_WEATHER, 1);
+      app_message_outbox_send();
+    }
   }
 
   if (seconds_timeout_left > 0) {
@@ -171,7 +174,7 @@ static void handle_accel_tap(AccelAxisType axis, int32_t direction) {
 
   time_t now = time(NULL);
   tick_time = localtime(&now);
-  handle_tick(tick_time, SECOND_UNIT | MINUTE_UNIT | HOUR_UNIT);
+  handle_tick(tick_time, SECOND_UNIT);
 
   tick_timer_service_unsubscribe();
   tick_timer_service_subscribe(SECOND_UNIT, &handle_tick);
@@ -214,15 +217,15 @@ static void layers_add_children(Layer *window_layer) {
   layer_add_child(s_active_layer, text_layer_get_layer(s_seconds_textlayer));
 }
 
-static void set_text_style(TextLayer *text_layer, GColor textlayer_color, int font_id) {
-  text_layer_set_font(text_layer, fonts_load_custom_font(resource_get_handle(font_id)));
+static void set_text_style(TextLayer *text_layer, GColor textlayer_color, GFont font) {
+  text_layer_set_font(text_layer, font);
   text_layer_set_text_color(text_layer, textlayer_color);
   text_layer_set_background_color(text_layer, GColorClear);
 }
 
 static void prv_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
-  GRect bounds = layer_get_bounds(window_layer);
+  //GRect bounds = layer_get_bounds(window_layer);
 
   window_set_background_color(window, settings.bg_color);
 
@@ -239,37 +242,37 @@ static void prv_window_load(Window *window) {
   s_01m_layer = layer_create(GRect(160, 0, 38, 76));
 
   s_weather1_textlayer = text_layer_create(GRect(0, 24, 200, 24));
-  set_text_style(s_weather1_textlayer, settings.weather_color, RESOURCE_ID_TERMINUS_BOLD_22);
+  set_text_style(s_weather1_textlayer, settings.weather_color, s_weatherline_font);
   text_layer_set_text_alignment(s_weather1_textlayer, GTextAlignmentCenter);
   text_layer_set_text(s_weather1_textlayer, weather_data.line1);
 
   s_weather2_textlayer = text_layer_create(GRect(0, 44, 200, 24));
-  set_text_style(s_weather2_textlayer, settings.weather_color, RESOURCE_ID_TERMINUS_BOLD_22);
+  set_text_style(s_weather2_textlayer, settings.weather_color, s_weatherline_font);
   text_layer_set_text_alignment(s_weather2_textlayer, GTextAlignmentCenter);
   text_layer_set_text(s_weather2_textlayer, weather_data.line2);
 
   s_date_textlayer = text_layer_create(GRect(2, 76, 148, 18));
-  set_text_style(s_date_textlayer, settings.date_color, RESOURCE_ID_TERMINUS_16);
+  set_text_style(s_date_textlayer, settings.date_color, s_dateline_font);
   text_layer_set_text(s_date_textlayer, "ERROR!");
 
   s_seconds_textlayer = text_layer_create(GRect(180, 76, 16, 18));
-  set_text_style(s_seconds_textlayer, settings.date_color, RESOURCE_ID_TERMINUS_16);
+  set_text_style(s_seconds_textlayer, settings.date_color, s_dateline_font);
   text_layer_set_text(s_seconds_textlayer, "--");
 
   s_health_layer = layer_create(GRect(0, 170, 200, 34));
 
   s_steps_textlayer = text_layer_create(GRect(6, 0, 53, 14));
-  set_text_style(s_steps_textlayer, settings.health_label_color, RESOURCE_ID_TERMINUS_12);
+  set_text_style(s_steps_textlayer, settings.health_label_color, s_healthlabel_font);
   text_layer_set_text(s_steps_textlayer, "STEPS:");
   s_stepsval_layer = layer_create(GRect(6, 14, 16*5, 20));
 
   s_hr_textlayer = text_layer_create(GRect(76, 0, 53, 14));
-  set_text_style(s_hr_textlayer, settings.health_label_color, RESOURCE_ID_TERMINUS_12);
+  set_text_style(s_hr_textlayer, settings.health_label_color, s_healthlabel_font);
   text_layer_set_text(s_hr_textlayer, "HR:");
   s_hrval_layer = layer_create(GRect(76, 14, 16*3, 20));
 
   s_sleep_textlayer = text_layer_create(GRect(130, 0, 53, 14));
-  set_text_style(s_sleep_textlayer, settings.health_label_color, RESOURCE_ID_TERMINUS_12);
+  set_text_style(s_sleep_textlayer, settings.health_label_color, s_healthlabel_font);
   text_layer_set_text(s_sleep_textlayer, "SLEEP:");
   s_sleepval_layer = layer_create(GRect(130, 14, 16*5, 20));
 
@@ -278,8 +281,8 @@ static void prv_window_load(Window *window) {
   layers_add_children(window_layer);
 
   time_t now = time(NULL);
-	tick_time = localtime(&now);
-	handle_tick(tick_time, SECOND_UNIT | MINUTE_UNIT | HOUR_UNIT | DAY_UNIT);
+  tick_time = localtime(&now);
+  handle_tick(tick_time, SECOND_UNIT | MINUTE_UNIT | HOUR_UNIT | DAY_UNIT);
 }
 
 static void prv_window_unload(Window *window) {
@@ -302,8 +305,12 @@ static void prv_window_unload(Window *window) {
   layer_destroy(s_stepsval_layer);
 
   text_layer_destroy(s_hr_textlayer);
+  layer_destroy(s_hrval_layer);
 
   text_layer_destroy(s_sleep_textlayer);
+  layer_destroy(s_sleepval_layer);
+
+  layer_destroy(s_health_layer);
 
   text_layer_destroy(s_date_textlayer);
   text_layer_destroy(s_seconds_textlayer);
@@ -329,13 +336,15 @@ static void prv_load_weatherdata() {
   if (persist_exists(WEATHER_KEY)) {
     APP_LOG(APP_LOG_LEVEL_DEBUG, "WEATHER_KEY persist exists!");
     persist_read_data(WEATHER_KEY, &weather_data, sizeof(weather_data));
-  } else {
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "WEATHER_KEY nonexist, send GET_WEATHER");
-    DictionaryIterator *iter;
-    app_message_outbox_begin(&iter);
-    dict_write_uint8(iter, MESSAGE_KEY_GET_WEATHER, 0);
-    app_message_outbox_send();
+
+    if ((time(NULL) - weather_data.last_updated) < 15*SECONDS_IN_MINUTE) return;
   }
+
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "WEATHER_KEY nonexist or data stale, send GET_WEATHER");
+  DictionaryIterator *iter;
+  app_message_outbox_begin(&iter);
+  dict_write_uint8(iter, MESSAGE_KEY_GET_WEATHER, 1);
+  app_message_outbox_send();
 }
 
 static void prv_save_weatherdata() {
@@ -353,6 +362,11 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context) 
   if (weatherline2_t) {
     strcpy(weather_data.line2, weatherline2_t->value->cstring);
     if (s_weather2_textlayer) text_layer_set_text(s_weather2_textlayer, weather_data.line2);
+  };
+
+  Tuple *weatherlastupdated_t = dict_find(iter, MESSAGE_KEY_WEATHERLASTUPDATED);
+  if (weatherlastupdated_t) {
+    weather_data.last_updated = (time_t)weatherlastupdated_t->value->uint32;
   };
 
   prv_save_weatherdata();
@@ -448,6 +462,8 @@ static void prv_init(void) {
   palette2[1] = settings.inactive_color;
 
   s_dateline_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_TERMINUS_16));
+  s_weatherline_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_TERMINUS_22));
+  s_healthlabel_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_TERMINUS_12));
 
   tick_timer_service_subscribe(SECOND_UNIT, &handle_tick);
   accel_tap_service_subscribe(handle_accel_tap);
@@ -466,6 +482,10 @@ static void prv_init(void) {
 
 static void prv_deinit(void) {
   window_destroy(s_window);
+
+  fonts_unload_custom_font(s_dateline_font);
+  fonts_unload_custom_font(s_weatherline_font);
+  fonts_unload_custom_font(s_healthlabel_font);
 }
 
 int main(void) {

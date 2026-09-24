@@ -18,6 +18,15 @@ module.exports = [
         "min": 0,
         "max": 120,
         "step": 5
+      },
+      {
+        "type": "slider",
+        "messageKey": "WeatherInterval",
+        "defaultValue": 15,
+        "label": "Weather Interval",
+        "min": 1,
+        "max": 120,
+        "step": 5
       }
     ]
   },

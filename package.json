@@ -16,7 +16,8 @@
     "enableMultiJS": true,
     "capabilities": [
       "health",
-      "configurable"
+      "configurable",
+      "location"
     ],
     "targetPlatforms": [
       "emery"
@@ -34,11 +35,15 @@
       "WeatherColor",
       "HealthLabelColor",
       "HealthActiveColor",
+
       "SecondsTimeout",
+      "WeatherInterval",
+
 
       "GET_WEATHER",
       "WEATHERLINE1",
-      "WEATHERLINE2"
+      "WEATHERLINE2",
+      "WEATHERLASTUPDATED"
     ],
     "resources": {
       "media": [
@@ -54,8 +59,8 @@
         },
         {
           "type": "font",
-          "name": "TERMINUS_BOLD_22",
-          "file": "fonts/terminusbold.ttf"
+          "name": "TERMINUS_22",
+          "file": "fonts/terminus.ttf"
         },
         {
           "type": "bitmap",

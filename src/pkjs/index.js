@@ -3,10 +3,10 @@ var clayConfig = require('./config');
 var clay = new Clay(clayConfig);
 
 const WMO_CODES = {
-  0: "CLEAR SKY",
-  1: "MAINLY CLEAR",
-  2: "PARTLY CLOUDY",
-  3: "OVERCAST",
+  0:  "CLEAR SKY",
+  1:  "MAINLY CLEAR",
+  2:  "PARTLY CLOUDY",
+  3:  "OVERCAST",
   45: "FOG",
   48: "RIME FOG",
   51: "LIGHT DRIZZLE",
@@ -51,7 +51,7 @@ function getWeatherLines(pos) {
   var lat = pos.coords.latitude;
   var lon = pos.coords.longitude;
 
-  var url =  'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,snowfall,showers,rain,precipitation,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_gusts_10m,wind_direction_10m,wind_speed_10m&timezone=auto';
+  var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=precipitation_probability_max&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,snowfall,showers,rain,precipitation,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_gusts_10m,wind_direction_10m,wind_speed_10m&timezone=auto';
 
   fetch(url).then(response => {
     if (response.ok) {
@@ -62,14 +62,16 @@ function getWeatherLines(pos) {
   }).then(data => {
     var dictionary = {
       'WEATHERLINE1':
-        Math.round(data.current.temperature_2m) + data.current_units.temperature_2m[1] + " " +
-        getCompassDirection(data.current.wind_direction_10m) + data.current.wind_speed_10m + " " +
-        data.current.precipitation,
-      'WEATHERLINE2': WMO_CODES[data.current.weather_code]
+        data.current.temperature_2m + data.current_units.temperature_2m[0] + " " +
+        Math.round(data.current.wind_speed_10m) + getCompassDirection(data.current.wind_direction_10m) + " " +
+        '(' + data.daily.precipitation_probability_max[0] + '%)',
+      'WEATHERLINE2': WMO_CODES[data.current.weather_code],
+      'WEATHERLASTUPDATED': Math.floor(Date.now() / 1000)
     };
 
-    console.log('WEATHERLINE1: ' + dictionary['WEATHERLINE1']);
-    console.log('WEATHERLINE2: ' + dictionary['WEATHERLINE2']);
+    console.log('WEATHERLINE1:       ' + dictionary['WEATHERLINE1']);
+    console.log('WEATHERLINE2:       ' + dictionary['WEATHERLINE2']);
+    console.log('WEATHERLASTUPDATED: ' + dictionary['WEATHERLASTUPDATED']);
 
     Pebble.sendAppMessage(dictionary,
       function(e) {
@@ -88,8 +90,8 @@ function locationError(err) {
   console.log('Error requesting location!');
 }
 
-function getLocation() {
-  navigator.geolocation.getCurrentPosition (
+function getWeather() {
+  navigator.geolocation.getCurrentPosition(
     getWeatherLines,
     locationError,
     {timeout: 15000, maximumAge: 60000}
@@ -101,7 +103,7 @@ Pebble.addEventListener('appmessage',
     console.log('AppMessage received!');
     if (e.payload.GET_WEATHER !== undefined) {
       console.log('Getting location');
-      getLocation();
+      getWeather();
     }
   }
 );
